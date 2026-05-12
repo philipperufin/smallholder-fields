@@ -546,11 +546,9 @@ def run(train_names, val_names, #test_names,
 
     # Set up names of directories and paths for saving
     if trained_model is None:
-        folder_name = model_type+'_'+str(epochs)+'_from-scratch_'+month+'_'+str(bands)+'_nfilter-'+str(n_filters)+'_depth-'+str(depth)+ \
-                      '_bs-'+str(batch_size)+'_lr-'+str(lr)+'_trainval-'+train_val+ \
-                      '_norm-'+str(normalize)+'_loss'+lossf+'_'+folder_suffix
+        model_name = model_type+'_'+folder_suffix
         if lr_decay:
-            folder_name = folder_name + '_lrdecay-'+str(lr_decay)
+            model_name = model_name + '_lrdecay-'+str(lr_decay)
 
         # define model
         model = FracTAL_ResUNet_cmtsk(nfilters_init=n_filters, depth=depth, NClasses=n_classes)
@@ -559,9 +557,7 @@ def run(train_names, val_names, #test_names,
         model.collect_params().reset_ctx(ctx)
 
     else:
-        folder_name = model_type+'_'+str(epochs)+'_from-scratch_'+month+'_'+str(bands)+'_nfilter-'+str(n_filters)+'_depth-'+str(depth)+ \
-                      '_bs-'+str(batch_size)+'_lr-'+str(lr)+'_trainval-'+train_val+ \
-                      '_norm-'+str(normalize)+'_loss'+lossf+'_'+folder_suffix
+        model_name = model_type+'_'+folder_suffix
 
         model = FracTAL_ResUNet_cmtsk(nfilters_init=n_filters, depth=depth, NClasses=n_classes)
         model.load_parameters(trained_model, ctx=ctx)
@@ -571,10 +567,8 @@ def run(train_names, val_names, #test_names,
         #    if i < 396:
         #        p[1].grad_req = 'null'
 
-    save_path = os.path.join('models/', folder_name)
-    if not os.path.isdir(save_path):
-        os.makedirs(save_path)
-    save_model_name = os.path.join(save_path, "model.params")
+
+    save_model_name = os.path.join('../model/', model_name + '.params')
 
     # Arguments
     args = {}
@@ -628,7 +622,7 @@ def run(train_names, val_names, #test_names,
                      'train_mcc': [], 'train_dice': []}
     val_metrics = {'val_loss': [], 'val_acc': [], 'val_f1': [],
                    'val_mcc': [], 'val_dice': []}
-    best_mcc = 0.0
+    best_loss = 100.0
 
     # training loop
     for epoch in range(1, epochs+1):
@@ -663,14 +657,19 @@ def run(train_names, val_names, #test_names,
         print("    Val loss {:0.3f}, accuracy {:0.3f}, F1-score {:0.3f}, MCC: {:0.3f}, Dice: {:0.3f}".format(
             val_loss_avg, val_accuracy.get()[1], val_f1.get()[1], val_mcc.get()[1], val_dice.get()[1]))
 
-        # save model based on best MCC metric
-        if val_mcc.get()[1] > best_mcc:
+        # save model based on min validation loss
+        if val_loss_avg < best_loss:
             model.save_parameters(save_model_name)
-            best_mcc = val_mcc.get()[1]
+            best_loss = val_loss_avg
+
+        # save model based on best MCC metric
+        #if val_mcc.get()[1] > best_mcc:
+        #    model.save_parameters(save_model_name)
+        #    best_mcc = val_mcc.get()[1]
 
         # save metrics
         metrics = pd.concat([pd.DataFrame(train_metrics), pd.DataFrame(val_metrics)], axis=1)
-        metrics.to_csv(os.path.join(save_path, 'metrics.csv'), index=False)
+        metrics.to_csv(os.path.join('../model/', model_name + '_metrics.csv'), index=False)
 
     #return model
 
